@@ -608,6 +608,92 @@
       );
     }
 
+    // --- 30-Day Discipline Trend Chart Component ---
+    function DisciplineTrendChart({ habits, habitLogs, today }) {
+      const [hoveredDay, setHoveredDay] = useState(null);
+
+      const thirtyDaysData = useMemo(() => {
+        const keys = getLastNDaysKeys(today, 30);
+        return keys.map(k => {
+          const log = habitLogs[k] || { completed: [] };
+          const total = habits.length || 1;
+          const completed = log.completed?.length || 0;
+          const pct = Math.round((completed / total) * 100);
+          const dateObj = new Date(k + "T00:00:00");
+          const label = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          return { dateKey: k, label, percentage: pct, completed, total };
+        });
+      }, [today, habitLogs, habits]);
+
+      const avgPercentage = useMemo(() => {
+        if (!thirtyDaysData.length) return 0;
+        const sum = thirtyDaysData.reduce((acc, d) => acc + d.percentage, 0);
+        return Math.round(sum / thirtyDaysData.length);
+      }, [thirtyDaysData]);
+
+      return (
+        <div className="p-4 rounded-2xl glass-panel space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xs font-semibold text-white">30-Day Discipline & Completion Trend</h3>
+              <p className="text-[10px] text-gray-400">Habit completion rate over the last 30 days</p>
+            </div>
+            <div className="text-right">
+              <span className="text-xs font-mono font-bold text-appGreen">{avgPercentage}%</span>
+              <span className="text-[10px] text-gray-400 block">30-Day Avg</span>
+            </div>
+          </div>
+
+          {/* SVG Bar / Trend Chart */}
+          <div className="pt-2">
+            <div className="h-32 w-full flex items-end justify-between space-x-1 pt-4 pb-2 px-1 relative">
+              {/* Background grid lines */}
+              <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-20">
+                <div className="border-b border-white/[0.1] w-full"></div>
+                <div className="border-b border-white/[0.1] w-full"></div>
+                <div className="border-b border-white/[0.1] w-full"></div>
+              </div>
+
+              {thirtyDaysData.map((d) => {
+                const heightPx = Math.max(8, Math.round((d.percentage / 100) * 96));
+                const isHovered = hoveredDay?.dateKey === d.dateKey;
+                const barColor = d.percentage === 100 ? "bg-appGreen shadow-[0_0_12px_rgba(74,222,128,0.5)]" : d.percentage >= 50 ? "bg-emerald-400/80" : d.percentage > 0 ? "bg-emerald-600/60" : "bg-white/[0.08]";
+
+                return (
+                  <div
+                    key={d.dateKey}
+                    onMouseEnter={() => setHoveredDay(d)}
+                    onMouseLeave={() => setHoveredDay(null)}
+                    className="flex-1 flex flex-col items-center h-full justify-end group cursor-pointer relative"
+                  >
+                    {/* Tooltip on hover */}
+                    {isHovered && (
+                      <div className="absolute -top-12 z-20 px-2.5 py-1 rounded-lg bg-[#121212] border border-appGreen/50 text-white text-[10px] whitespace-nowrap shadow-xl pointer-events-none">
+                        <p className="font-bold text-appGreen">{d.label}</p>
+                        <p className="text-gray-300">{d.completed}/{d.total} Habits ({d.percentage}%)</p>
+                      </div>
+                    )}
+
+                    <div
+                      style={{ height: `${heightPx}px` }}
+                      className={`w-full rounded-t transition-all duration-300 ${barColor} group-hover:bg-appGreen`}
+                    ></div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* X-Axis Labels */}
+            <div className="flex items-center justify-between text-[9px] font-mono text-gray-500 pt-1 border-t border-white/[0.08]">
+              <span>{thirtyDaysData[0]?.label}</span>
+              <span>15 Days Ago</span>
+              <span>Today ({thirtyDaysData[thirtyDaysData.length - 1]?.label})</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     // ==========================================
     // MAIN APP COMPONENT
     // ==========================================
@@ -1152,7 +1238,15 @@
               )}
 
               {activeTab === "gemini" && (
-                <GeminiSpaceSection notes={notes} onBackToMore={() => setActiveTab("more")} />
+                <GeminiSpaceSection 
+                  notes={notes} 
+                  habits={habits}
+                  habitLogs={habitLogs}
+                  workouts={workouts}
+                  exams={exams}
+                  scheduledWorkouts={scheduledWorkouts}
+                  onBackToMore={() => setActiveTab("more")} 
+                />
               )}
             </div>
           </main>
@@ -1449,6 +1543,9 @@
               </span>
             </div>
           )}
+
+          {/* 30-Day Discipline Trend Chart */}
+          <DisciplineTrendChart habits={habits} habitLogs={habitLogs} today={today} />
 
           {/* Action Header & Habits Title */}
           <div className="flex items-center justify-between pt-1">
@@ -3613,7 +3710,7 @@
     // ==========================================
     // 9. GEMINI SPACE & AI FLASHCARD GENERATOR (MULTI-PROVIDER)
     // ==========================================
-    function GeminiSpaceSection({ notes, onBackToMore }) {
+    function GeminiSpaceSection({ notes, habits, habitLogs, workouts, exams, scheduledWorkouts, onBackToMore }) {
       const [aiProvider, setAiProvider] = useState(localStorage.getItem("orion_ai_provider") || "gemini");
       const [apiKey, setApiKey] = useState(localStorage.getItem("orion_ai_key") || localStorage.getItem("orion_gemini_key") || "");
       const [aiModel, setAiModel] = useState(localStorage.getItem("orion_ai_model") || "gemini-2.5-flash");
@@ -3623,6 +3720,36 @@
       const [loading, setLoading] = useState(false);
       const [flashcards, setFlashcards] = useState([]);
       const [flippedCard, setFlippedCard] = useState({});
+
+      // JARVIS Oversight & Chat Mode State
+      const [jarvisPermission, setJarvisPermission] = useState(localStorage.getItem("orion_jarvis_permission") === "true");
+      const [jarvisQuery, setJarvisQuery] = useState("");
+      const [jarvisChatLog, setJarvisChatLog] = useState([
+        { role: "assistant", content: "Greetings, Sir. I am JARVIS, your executive AI assistant. Grant me oversight permission or upload your progress/backup file below, and I shall analyze your productivity logs." }
+      ]);
+      const [jarvisLoading, setJarvisLoading] = useState(false);
+      const [jarvisUploadedData, setJarvisUploadedData] = useState(null);
+      const [jarvisFileName, setJarvisFileName] = useState("");
+
+      const handleUploadProgressFile = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setJarvisFileName(file.name);
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const parsed = JSON.parse(event.target.result);
+            setJarvisUploadedData(parsed);
+            setJarvisChatLog(prev => [
+              ...prev,
+              { role: "assistant", content: `Sir, I have successfully received and parsed your progress file (${file.name}). All backup logs, exam scores, and habit records are now loaded into my active memory for analysis.` }
+            ]);
+          } catch (err) {
+            alert("Invalid JSON progress file: " + err.message);
+          }
+        };
+        reader.readAsText(file);
+      };
 
       const [googleAccount, setGoogleAccount] = useState(localStorage.getItem("orion_google_account") || "");
       const [showAccountInput, setShowAccountInput] = useState(false);
@@ -3644,6 +3771,115 @@
         localStorage.setItem("orion_google_account", emailInput.trim());
         setGoogleAccount(emailInput.trim());
         setShowAccountInput(false);
+      };
+
+      const handleToggleJarvisPermission = () => {
+        const next = !jarvisPermission;
+        setJarvisPermission(next);
+        localStorage.setItem("orion_jarvis_permission", next ? "true" : "false");
+        if (next) {
+          alert("JARVIS Oversight Granted! JARVIS now has permission to analyze your Orion workspace data.");
+        } else {
+          alert("JARVIS Oversight Revoked.");
+        }
+      };
+
+      const handleAskJarvis = async (e) => {
+        e.preventDefault();
+        if (!jarvisQuery.trim()) return;
+        if (!jarvisPermission) {
+          alert("Please grant JARVIS Oversight Permission first so JARVIS can inspect your app data.");
+          return;
+        }
+
+        const userMsg = jarvisQuery.trim();
+        setJarvisQuery("");
+        setJarvisChatLog(prev => [...prev, { role: "user", content: userMsg }]);
+        setJarvisLoading(true);
+
+        try {
+          const key = localStorage.getItem("orion_ai_key") || localStorage.getItem("orion_gemini_key");
+          if (!key) {
+            setTimeout(() => {
+              setJarvisChatLog(prev => [...prev, { role: "assistant", content: "Sir, I notice you haven't connected an API key yet. Please connect your Gemini, OpenRouter, or OpenAI API key above so I can process your live workspace data." }]);
+              setJarvisLoading(false);
+            }, 800);
+            return;
+          }
+
+          const appSummary = `
+--- ORION PROGRESS FILE & LIVE DATA OVERSIGHT ---
+${jarvisUploadedData ? `UPLOADED PROGRESS FILE (${jarvisFileName}):\n` + JSON.stringify(jarvisUploadedData, null, 2) : "No separate progress file uploaded. Using live workspace state:"}
+Live Notes: ${JSON.stringify(notes || [])}
+Live Habits: ${JSON.stringify(habits || [])}
+Live Habit Logs: ${JSON.stringify(habitLogs || {})}
+Live Workouts: ${JSON.stringify(workouts || [])}
+Live Exams & Marks: ${JSON.stringify(exams || [])}
+-----------------------------------
+`;
+
+          const systemPrompt = "You are JARVIS, Tony Stark's hyper-intelligent, witty, and exceptionally loyal AI assistant. You are overseeing the user's personal productivity, discipline, workouts, and academic exams in the Orion system. Analyze their app data accurately and provide concise, high-impact tactical guidance with your signature British wit and analytical brilliance.";
+          const modelToUse = aiModel || (aiProvider === "gemini" ? "gemini-2.5-flash" : "openai/gpt-4o-mini");
+
+          let replyText = "";
+
+          if (aiProvider === "gemini") {
+            const promptFull = `${systemPrompt}\n\n${appSummary}\n\nUser Question: ${userMsg}`;
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${key}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ contents: [{ parts: [{ text: promptFull }] }] })
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error.message || "Gemini error");
+            replyText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          } else if (aiProvider === "openrouter") {
+            const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${key}`,
+                "Content-Type": "application/json",
+                "HTTP-Referer": window.location.origin,
+                "X-Title": "Orion JARVIS"
+              },
+              body: JSON.stringify({
+                model: modelToUse,
+                messages: [
+                  { role: "system", content: systemPrompt },
+                  { role: "user", content: `${appSummary}\n\nUser Question: ${userMsg}` }
+                ]
+              })
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error.message || "OpenRouter error");
+            replyText = data.choices?.[0]?.message?.content || "";
+          } else if (aiProvider === "openai") {
+            const res = await fetch("https://api.openai.com/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${key}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                model: modelToUse,
+                messages: [
+                  { role: "system", content: systemPrompt },
+                  { role: "user", content: `${appSummary}\n\nUser Question: ${userMsg}` }
+                ]
+              })
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error.message || "OpenAI error");
+            replyText = data.choices?.[0]?.message?.content || "";
+          }
+
+          setJarvisChatLog(prev => [...prev, { role: "assistant", content: replyText }]);
+          setJarvisLoading(false);
+        } catch (err) {
+          console.error(err);
+          setJarvisLoading(false);
+          setJarvisChatLog(prev => [...prev, { role: "assistant", content: "Apologies, Sir. I encountered a communication error with the AI provider: " + err.message }]);
+        }
       };
 
       const handleGenerateFlashcards = async () => {
@@ -3948,6 +4184,92 @@
                 {response}
               </div>
             )}
+          </div>
+
+          {/* JARVIS AI Executive Assistant Card */}
+          <div className="p-4 rounded-2xl glass-panel space-y-3 border border-emerald-500/30 bg-gradient-to-br from-black/80 via-black/90 to-emerald-950/20">
+            <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
+              <div className="flex items-center space-x-2.5">
+                <span className="text-xl">🤖</span>
+                <div>
+                  <h3 className="text-sm font-bold text-white">JARVIS AI Executive Assistant</h3>
+                  <p className="text-[10px] text-emerald-400 font-mono">App Data Oversight & Tactical Coaching</p>
+                </div>
+              </div>
+              <button
+                onClick={handleToggleJarvisPermission}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-md ${
+                  jarvisPermission
+                    ? "bg-emerald-500 text-black shadow-emerald-500/20"
+                    : "bg-white/[0.08] text-gray-300 hover:bg-white/[0.15]"
+                }`}
+              >
+                {jarvisPermission ? "🛡️ Oversight Granted (Active)" : "🔒 Grant App Oversight"}
+              </button>
+            </div>
+
+            <p className="text-[11px] text-gray-300 leading-relaxed">
+              When <strong>App Oversight</strong> is granted or your exported progress backup file is uploaded, JARVIS will analyze your tracking records and provide tactical coaching.
+            </p>
+
+            {/* Progress File Upload Widget */}
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-black/60 border border-white/[0.08]">
+              <div className="flex items-center space-x-2 truncate pr-2">
+                <span className="text-sm">📁</span>
+                <span className="text-[11px] text-gray-300 truncate font-mono">
+                  {jarvisFileName ? `Loaded: ${jarvisFileName}` : "Upload exported progress JSON file for JARVIS to read"}
+                </span>
+              </div>
+              <label className="px-3 py-1.5 rounded-lg bg-white/[0.08] text-white text-[11px] font-semibold hover:bg-white/[0.15] transition cursor-pointer shrink-0">
+                <span>Browse File</span>
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleUploadProgressFile}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            {/* Chat Box */}
+            <div className="p-3 rounded-xl bg-black/70 border border-white/[0.08] space-y-2.5 max-h-60 overflow-y-auto scrollbar-none">
+              {jarvisChatLog.map((msg, idx) => (
+                <div key={idx} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}>
+                  <div className={`p-2.5 rounded-xl text-xs max-w-[85%] leading-relaxed ${
+                    msg.role === "user"
+                      ? "bg-appGreen text-black font-medium"
+                      : "bg-white/[0.06] text-gray-200 border border-white/[0.08]"
+                  }`}>
+                    {msg.role === "assistant" && <strong className="text-emerald-400 block mb-0.5 font-mono text-[10px]">JARVIS:</strong>}
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+              {jarvisLoading && (
+                <div className="flex items-center space-x-2 text-xs text-emerald-400 font-mono p-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                  <span>JARVIS is analyzing your workspace data...</span>
+                </div>
+              )}
+            </div>
+
+            <form onSubmit={handleAskJarvis} className="flex items-center space-x-2 pt-1">
+              <input
+                type="text"
+                value={jarvisQuery}
+                onChange={(e) => setJarvisQuery(e.target.value)}
+                placeholder={jarvisPermission ? "Ask JARVIS to review your habits, exams, or workouts..." : "Grant app oversight permission above to chat with JARVIS..."}
+                disabled={!jarvisPermission || jarvisLoading}
+                className="flex-1 p-2.5 rounded-xl bg-black/90 border border-white/[0.1] text-xs text-white focus:outline-none focus:border-appGreen disabled:opacity-50"
+              />
+              <button
+                type="submit"
+                disabled={!jarvisPermission || jarvisLoading}
+                className="px-4 py-2.5 rounded-xl bg-appGreen text-black text-xs font-bold hover:bg-green-400 transition disabled:opacity-50 shadow-lg shadow-green-500/20 shrink-0"
+              >
+                Send
+              </button>
+            </form>
           </div>
         </div>
       );
