@@ -1,0 +1,8 @@
+{
+  "latestVersion": "2.2.4",
+  "releaseName": "ORION v2.2.4 — Real-Time Compressed Auto-Save Engine",
+  "releaseNotes": "Automated Base64-compressed real-time auto-saving after every button action across web, PWA, Android, Windows, and iOS.",
+  "apkUrl": "https://github.com/Jitvaraj/Orion-Forge/releases",
+  "windowsUrl": "https://github.com/Jitvaraj/Orion-Forge/releases",
+  "webUrl": "https://jitvaraj.github.io/Orion-Forge/"
+}
