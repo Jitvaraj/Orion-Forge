@@ -45,8 +45,8 @@
     };
   </script>
 
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tailwind CSS (Local with CDN fallback for offline APK execution) -->
+  <script src="./vendor/tailwindcss.js" onerror="this.onerror=null;this.src='https://cdn.tailwindcss.com';"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -73,10 +73,10 @@
     };
   </script>
 
-  <!-- React & Babel for standalone execution -->
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- React & Babel (Local with CDN fallback for offline APK execution) -->
+  <script src="./vendor/react.production.min.js" onerror="this.onerror=null;this.src='https://unpkg.com/react@18/umd/react.production.min.js';" crossorigin></script>
+  <script src="./vendor/react-dom.production.min.js" onerror="this.onerror=null;this.src='https://unpkg.com/react-dom@18/umd/react-dom.production.min.js';" crossorigin></script>
+  <script src="./vendor/babel.min.js" onerror="this.onerror=null;this.src='https://unpkg.com/@babel/standalone/babel.min.js';"></script>
 
   <style>
     * {
@@ -603,6 +603,92 @@
               {Math.round(validPct)}%
             </span>
             {label && <span className="text-[9px] text-gray-400 -mt-0.5">{label}</span>}
+          </div>
+        </div>
+      );
+    }
+
+    // --- 30-Day Discipline Trend Chart Component ---
+    function DisciplineTrendChart({ habits, habitLogs, today }) {
+      const [hoveredDay, setHoveredDay] = useState(null);
+
+      const thirtyDaysData = useMemo(() => {
+        const keys = getLastNDaysKeys(today, 30);
+        return keys.map(k => {
+          const log = habitLogs[k] || { completed: [] };
+          const total = habits.length || 1;
+          const completed = log.completed?.length || 0;
+          const pct = Math.round((completed / total) * 100);
+          const dateObj = new Date(k + "T00:00:00");
+          const label = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          return { dateKey: k, label, percentage: pct, completed, total };
+        });
+      }, [today, habitLogs, habits]);
+
+      const avgPercentage = useMemo(() => {
+        if (!thirtyDaysData.length) return 0;
+        const sum = thirtyDaysData.reduce((acc, d) => acc + d.percentage, 0);
+        return Math.round(sum / thirtyDaysData.length);
+      }, [thirtyDaysData]);
+
+      return (
+        <div className="p-4 rounded-2xl glass-panel space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xs font-semibold text-white">30-Day Discipline & Completion Trend</h3>
+              <p className="text-[10px] text-gray-400">Habit completion rate over the last 30 days</p>
+            </div>
+            <div className="text-right">
+              <span className="text-xs font-mono font-bold text-appGreen">{avgPercentage}%</span>
+              <span className="text-[10px] text-gray-400 block">30-Day Avg</span>
+            </div>
+          </div>
+
+          {/* SVG Bar / Trend Chart */}
+          <div className="pt-2">
+            <div className="h-32 w-full flex items-end justify-between space-x-1 pt-4 pb-2 px-1 relative">
+              {/* Background grid lines */}
+              <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-20">
+                <div className="border-b border-white/[0.1] w-full"></div>
+                <div className="border-b border-white/[0.1] w-full"></div>
+                <div className="border-b border-white/[0.1] w-full"></div>
+              </div>
+
+              {thirtyDaysData.map((d) => {
+                const heightPx = Math.max(8, Math.round((d.percentage / 100) * 96));
+                const isHovered = hoveredDay?.dateKey === d.dateKey;
+                const barColor = d.percentage === 100 ? "bg-appGreen shadow-[0_0_12px_rgba(74,222,128,0.5)]" : d.percentage >= 50 ? "bg-emerald-400/80" : d.percentage > 0 ? "bg-emerald-600/60" : "bg-white/[0.08]";
+
+                return (
+                  <div
+                    key={d.dateKey}
+                    onMouseEnter={() => setHoveredDay(d)}
+                    onMouseLeave={() => setHoveredDay(null)}
+                    className="flex-1 flex flex-col items-center h-full justify-end group cursor-pointer relative"
+                  >
+                    {/* Tooltip on hover */}
+                    {isHovered && (
+                      <div className="absolute -top-12 z-20 px-2.5 py-1 rounded-lg bg-[#121212] border border-appGreen/50 text-white text-[10px] whitespace-nowrap shadow-xl pointer-events-none">
+                        <p className="font-bold text-appGreen">{d.label}</p>
+                        <p className="text-gray-300">{d.completed}/{d.total} Habits ({d.percentage}%)</p>
+                      </div>
+                    )}
+
+                    <div
+                      style={{ height: `${heightPx}px` }}
+                      className={`w-full rounded-t transition-all duration-300 ${barColor} group-hover:bg-appGreen`}
+                    ></div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* X-Axis Labels */}
+            <div className="flex items-center justify-between text-[9px] font-mono text-gray-500 pt-1 border-t border-white/[0.08]">
+              <span>{thirtyDaysData[0]?.label}</span>
+              <span>15 Days Ago</span>
+              <span>Today ({thirtyDaysData[thirtyDaysData.length - 1]?.label})</span>
+            </div>
           </div>
         </div>
       );
@@ -1152,7 +1238,15 @@
               )}
 
               {activeTab === "gemini" && (
-                <GeminiSpaceSection notes={notes} onBackToMore={() => setActiveTab("more")} />
+                <GeminiSpaceSection 
+                  notes={notes} 
+                  habits={habits}
+                  habitLogs={habitLogs}
+                  workouts={workouts}
+                  exams={exams}
+                  scheduledWorkouts={scheduledWorkouts}
+                  onBackToMore={() => setActiveTab("more")} 
+                />
               )}
             </div>
           </main>
@@ -1449,6 +1543,9 @@
               </span>
             </div>
           )}
+
+          {/* 30-Day Discipline Trend Chart */}
+          <DisciplineTrendChart habits={habits} habitLogs={habitLogs} today={today} />
 
           {/* Action Header & Habits Title */}
           <div className="flex items-center justify-between pt-1">
@@ -3611,16 +3708,48 @@
     }
 
     // ==========================================
-    // 9. GEMINI SPACE & FLASHCARD GENERATOR
+    // 9. GEMINI SPACE & AI FLASHCARD GENERATOR (MULTI-PROVIDER)
     // ==========================================
-    function GeminiSpaceSection({ notes, onBackToMore }) {
-      const [apiKey, setApiKey] = useState(localStorage.getItem("orion_gemini_key") || "");
-      const [connected, setConnected] = useState(!!localStorage.getItem("orion_gemini_key"));
-      const [aiPrompt, setAiPrompt] = useState("");
+    function GeminiSpaceSection({ notes, habits, habitLogs, workouts, exams, scheduledWorkouts, onBackToMore }) {
+      const [aiProvider, setAiProvider] = useState(localStorage.getItem("orion_ai_provider") || "gemini");
+      const [apiKey, setApiKey] = useState(localStorage.getItem("orion_ai_key") || localStorage.getItem("orion_gemini_key") || "");
+      const [aiModel, setAiModel] = useState(localStorage.getItem("orion_ai_model") || "gemini-2.5-flash");
+      const [connected, setConnected] = useState(!!(localStorage.getItem("orion_ai_key") || localStorage.getItem("orion_gemini_key")));
+      
       const [response, setResponse] = useState("");
       const [loading, setLoading] = useState(false);
       const [flashcards, setFlashcards] = useState([]);
       const [flippedCard, setFlippedCard] = useState({});
+
+      // JARVIS Oversight & Chat Mode State
+      const [jarvisPermission, setJarvisPermission] = useState(localStorage.getItem("orion_jarvis_permission") === "true");
+      const [jarvisQuery, setJarvisQuery] = useState("");
+      const [jarvisChatLog, setJarvisChatLog] = useState([
+        { role: "assistant", content: "Greetings, Sir. I am JARVIS, your executive AI assistant. Grant me oversight permission or upload your progress/backup file below, and I shall analyze your productivity logs." }
+      ]);
+      const [jarvisLoading, setJarvisLoading] = useState(false);
+      const [jarvisUploadedData, setJarvisUploadedData] = useState(null);
+      const [jarvisFileName, setJarvisFileName] = useState("");
+
+      const handleUploadProgressFile = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setJarvisFileName(file.name);
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const parsed = JSON.parse(event.target.result);
+            setJarvisUploadedData(parsed);
+            setJarvisChatLog(prev => [
+              ...prev,
+              { role: "assistant", content: `Sir, I have successfully received and parsed your progress file (${file.name}). All backup logs, exam scores, and habit records are now loaded into my active memory for analysis.` }
+            ]);
+          } catch (err) {
+            alert("Invalid JSON progress file: " + err.message);
+          }
+        };
+        reader.readAsText(file);
+      };
 
       const [googleAccount, setGoogleAccount] = useState(localStorage.getItem("orion_google_account") || "");
       const [showAccountInput, setShowAccountInput] = useState(false);
@@ -3629,9 +3758,11 @@
       const handleSaveKey = (e) => {
         e.preventDefault();
         if (!apiKey.trim()) return;
-        localStorage.setItem("orion_gemini_key", apiKey.trim());
+        localStorage.setItem("orion_ai_key", apiKey.trim());
+        localStorage.setItem("orion_ai_provider", aiProvider);
+        localStorage.setItem("orion_ai_model", aiModel);
         setConnected(true);
-        alert("Gemini API key saved successfully!");
+        alert(`${aiProvider.toUpperCase()} API key saved successfully! You are ready to generate.`);
       };
 
       const handleLinkGoogleAccount = (e) => {
@@ -3642,6 +3773,115 @@
         setShowAccountInput(false);
       };
 
+      const handleToggleJarvisPermission = () => {
+        const next = !jarvisPermission;
+        setJarvisPermission(next);
+        localStorage.setItem("orion_jarvis_permission", next ? "true" : "false");
+        if (next) {
+          alert("JARVIS Oversight Granted! JARVIS now has permission to analyze your Orion workspace data.");
+        } else {
+          alert("JARVIS Oversight Revoked.");
+        }
+      };
+
+      const handleAskJarvis = async (e) => {
+        e.preventDefault();
+        if (!jarvisQuery.trim()) return;
+        if (!jarvisPermission) {
+          alert("Please grant JARVIS Oversight Permission first so JARVIS can inspect your app data.");
+          return;
+        }
+
+        const userMsg = jarvisQuery.trim();
+        setJarvisQuery("");
+        setJarvisChatLog(prev => [...prev, { role: "user", content: userMsg }]);
+        setJarvisLoading(true);
+
+        try {
+          const key = localStorage.getItem("orion_ai_key") || localStorage.getItem("orion_gemini_key");
+          if (!key) {
+            setTimeout(() => {
+              setJarvisChatLog(prev => [...prev, { role: "assistant", content: "Sir, I notice you haven't connected an API key yet. Please connect your Gemini, OpenRouter, or OpenAI API key above so I can process your live workspace data." }]);
+              setJarvisLoading(false);
+            }, 800);
+            return;
+          }
+
+          const appSummary = `
+--- ORION PROGRESS FILE & LIVE DATA OVERSIGHT ---
+${jarvisUploadedData ? `UPLOADED PROGRESS FILE (${jarvisFileName}):\n` + JSON.stringify(jarvisUploadedData, null, 2) : "No separate progress file uploaded. Using live workspace state:"}
+Live Notes: ${JSON.stringify(notes || [])}
+Live Habits: ${JSON.stringify(habits || [])}
+Live Habit Logs: ${JSON.stringify(habitLogs || {})}
+Live Workouts: ${JSON.stringify(workouts || [])}
+Live Exams & Marks: ${JSON.stringify(exams || [])}
+-----------------------------------
+`;
+
+          const systemPrompt = "You are JARVIS, Tony Stark's hyper-intelligent, witty, and exceptionally loyal AI assistant. You are overseeing the user's personal productivity, discipline, workouts, and academic exams in the Orion system. Analyze their app data accurately and provide concise, high-impact tactical guidance with your signature British wit and analytical brilliance.";
+          const modelToUse = aiModel || (aiProvider === "gemini" ? "gemini-2.5-flash" : "openai/gpt-4o-mini");
+
+          let replyText = "";
+
+          if (aiProvider === "gemini") {
+            const promptFull = `${systemPrompt}\n\n${appSummary}\n\nUser Question: ${userMsg}`;
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${key}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ contents: [{ parts: [{ text: promptFull }] }] })
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error.message || "Gemini error");
+            replyText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          } else if (aiProvider === "openrouter") {
+            const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${key}`,
+                "Content-Type": "application/json",
+                "HTTP-Referer": window.location.origin,
+                "X-Title": "Orion JARVIS"
+              },
+              body: JSON.stringify({
+                model: modelToUse,
+                messages: [
+                  { role: "system", content: systemPrompt },
+                  { role: "user", content: `${appSummary}\n\nUser Question: ${userMsg}` }
+                ]
+              })
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error.message || "OpenRouter error");
+            replyText = data.choices?.[0]?.message?.content || "";
+          } else if (aiProvider === "openai") {
+            const res = await fetch("https://api.openai.com/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${key}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                model: modelToUse,
+                messages: [
+                  { role: "system", content: systemPrompt },
+                  { role: "user", content: `${appSummary}\n\nUser Question: ${userMsg}` }
+                ]
+              })
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error.message || "OpenAI error");
+            replyText = data.choices?.[0]?.message?.content || "";
+          }
+
+          setJarvisChatLog(prev => [...prev, { role: "assistant", content: replyText }]);
+          setJarvisLoading(false);
+        } catch (err) {
+          console.error(err);
+          setJarvisLoading(false);
+          setJarvisChatLog(prev => [...prev, { role: "assistant", content: "Apologies, Sir. I encountered a communication error with the AI provider: " + err.message }]);
+        }
+      };
+
       const handleGenerateFlashcards = async () => {
         if (!notes || notes.length === 0) {
           alert("Please add some study notes first to generate flashcards.");
@@ -3650,8 +3890,9 @@
         setLoading(true);
         setResponse("");
         try {
-          const key = localStorage.getItem("orion_gemini_key");
+          const key = localStorage.getItem("orion_ai_key") || localStorage.getItem("orion_gemini_key");
           const noteText = notes.map(n => `Title: ${n.title}\nContent: ${n.content}`).join("\n\n");
+          const promptText = `Based on these study notes, generate 3 high-yield Q&A flashcards in valid JSON format as an array of objects with keys "q" and "a":\n\n${noteText}`;
           
           if (!key) {
             // Mock intelligent flashcards if no key provided yet
@@ -3666,26 +3907,78 @@
             return;
           }
 
-          // Real call to Gemini API using @google/genai pattern
-          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{
-                parts: [{
-                  text: `Based on these study notes, generate 3 high-yield Q&A flashcards in valid JSON format as an array of objects with keys "q" and "a":\n\n${noteText}`
+          let rawText = "";
+
+          if (aiProvider === "gemini") {
+            const modelToUse = aiModel || "gemini-2.5-flash";
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${key}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contents: [{
+                  parts: [{ text: promptText }]
                 }]
-              }]
-            })
-          });
-          const data = await res.json();
-          const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-          setResponse(text);
+              })
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error.message || "Gemini API error");
+            rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          } else if (aiProvider === "openrouter") {
+            const modelToUse = aiModel || "openai/gpt-4o-mini";
+            const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${key}`,
+                "Content-Type": "application/json",
+                "HTTP-Referer": window.location.origin,
+                "X-Title": "Orion Productivity"
+              },
+              body: JSON.stringify({
+                model: modelToUse,
+                messages: [{ role: "user", content: promptText }]
+              })
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error.message || "OpenRouter API error");
+            rawText = data.choices?.[0]?.message?.content || "";
+          } else if (aiProvider === "openai") {
+            const modelToUse = aiModel || "gpt-4o-mini";
+            const res = await fetch("https://api.openai.com/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${key}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                model: modelToUse,
+                messages: [{ role: "user", content: promptText }]
+              })
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error.message || "OpenAI API error");
+            rawText = data.choices?.[0]?.message?.content || "";
+          }
+
+          setResponse(rawText);
+
+          // Try parsing JSON from rawText
+          try {
+            // Find JSON array in text
+            const jsonMatch = rawText.match(/\[\s*\{[\s\S]*\}\s*\]/);
+            if (jsonMatch) {
+              const parsed = JSON.parse(jsonMatch[0]);
+              const formatted = parsed.map((p, idx) => ({ id: idx + 1, q: p.q, a: p.a }));
+              if (formatted.length > 0) setFlashcards(formatted);
+            }
+          } catch (parseErr) {
+            console.warn("Could not parse JSON flashcards directly, displaying raw AI response.", parseErr);
+          }
+
           setLoading(false);
         } catch (err) {
           console.error(err);
           setLoading(false);
-          alert("Failed to generate via Gemini: " + err.message);
+          alert("AI Generation failed: " + err.message);
         }
       };
 
@@ -3702,8 +3995,8 @@
 
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-xl font-bold tracking-tight text-white">Gemini Space</h1>
-              <p className="text-xs text-gray-400 mt-0.5">Connect Google AI & generate smart study flashcards</p>
+              <h1 className="text-xl font-bold tracking-tight text-white">AI Space & Flashcards</h1>
+              <p className="text-xs text-gray-400 mt-0.5">Bring your own API key (Gemini, OpenRouter, OpenAI) for smart active recall</p>
             </div>
           </div>
 
@@ -3713,10 +4006,10 @@
               <div className="space-y-1">
                 <div className="flex items-center space-x-2">
                   <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping"></span>
-                  <span className="text-xs font-bold text-white tracking-wide uppercase">This Section Is Online</span>
+                  <span className="text-xs font-bold text-white tracking-wide uppercase">Bring Your Own API Key</span>
                 </div>
                 <p className="text-[11px] text-gray-300 leading-relaxed">
-                  Connect your Google Account / Gemini API key to sync intelligent AI features & active recall flashcards.
+                  You can connect <strong>Google Gemini</strong>, <strong>OpenRouter</strong> (Claude, GPT-4, Llama), or <strong>OpenAI</strong> keys. All keys are stored securely in your browser's local storage.
                 </p>
               </div>
               <button
@@ -3753,12 +4046,12 @@
             )}
           </div>
 
-          {/* Google Account / API Key Connection Card */}
+          {/* Multi-Provider API Key Connection Card */}
           <div className="p-4 rounded-2xl glass-panel space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-appGreen animate-pulse"></span>
-                <h3 className="text-xs font-semibold text-white">Gemini API Integration</h3>
+                <h3 className="text-xs font-semibold text-white">AI Provider & API Key Setup</h3>
               </div>
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
                 connected ? "border-appGreen/30 text-appGreen bg-appGreenSubtle" : "border-yellow-500/30 text-yellow-400 bg-yellow-500/10"
@@ -3767,29 +4060,73 @@
               </span>
             </div>
 
-            <form onSubmit={handleSaveKey} className="space-y-2.5 pt-1">
+            <form onSubmit={handleSaveKey} className="space-y-3 pt-1">
               <div>
-                <label className="text-[11px] text-gray-400">Google Gemini API Key</label>
+                <label className="text-[11px] text-gray-400 block mb-1">Select AI Provider</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: "gemini", label: "Google Gemini" },
+                    { id: "openrouter", label: "OpenRouter" },
+                    { id: "openai", label: "OpenAI" }
+                  ].map(p => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setAiProvider(p.id);
+                        if (p.id === "gemini") setAiModel("gemini-2.5-flash");
+                        else if (p.id === "openrouter") setAiModel("openai/gpt-4o-mini");
+                        else if (p.id === "openai") setAiModel("gpt-4o-mini");
+                      }}
+                      className={`py-2 rounded-xl text-xs font-bold transition border ${
+                        aiProvider === p.id
+                          ? "bg-appGreen text-black border-appGreen shadow-md"
+                          : "bg-black/50 text-gray-300 border-white/[0.08] hover:bg-white/[0.05]"
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] text-gray-400">Model Name / ID</label>
+                <input
+                  type="text"
+                  value={aiModel}
+                  onChange={(e) => setAiModel(e.target.value)}
+                  placeholder={aiProvider === "gemini" ? "gemini-2.5-flash" : aiProvider === "openrouter" ? "openai/gpt-4o-mini or anthropic/claude-3.5-sonnet" : "gpt-4o-mini"}
+                  className="w-full mt-1 p-2.5 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white font-mono focus:outline-none focus:border-appGreen"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] text-gray-400">
+                  {aiProvider === "gemini" ? "Google Gemini API Key (AIzaSy...)" : aiProvider === "openrouter" ? "OpenRouter API Key (sk-or-...)" : "OpenAI API Key (sk-...)"}
+                </label>
                 <input
                   type="password"
                   required
-                  placeholder="AIzaSy..."
+                  placeholder="Paste your API key here..."
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
                   className="w-full mt-1 p-2.5 rounded-xl bg-black/70 border border-white/[0.08] text-xs text-white font-mono focus:outline-none focus:border-appGreen"
                 />
               </div>
-              <div className="flex space-x-2">
+
+              <div className="flex space-x-2 pt-1">
                 <button
                   type="submit"
-                  className="flex-1 py-2 rounded-xl bg-appGreen text-black text-xs font-semibold hover:bg-green-400 transition"
+                  className="flex-1 py-2.5 rounded-xl bg-appGreen text-black text-xs font-bold hover:bg-green-400 transition shadow-lg shadow-green-500/20"
                 >
-                  Save & Connect Space
+                  Save & Connect API Key
                 </button>
                 {connected && (
                   <button
                     type="button"
                     onClick={() => {
+                      localStorage.removeItem("orion_ai_key");
                       localStorage.removeItem("orion_gemini_key");
                       setApiKey("");
                       setConnected(false);
@@ -3847,6 +4184,92 @@
                 {response}
               </div>
             )}
+          </div>
+
+          {/* JARVIS AI Executive Assistant Card */}
+          <div className="p-4 rounded-2xl glass-panel space-y-3 border border-emerald-500/30 bg-gradient-to-br from-black/80 via-black/90 to-emerald-950/20">
+            <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
+              <div className="flex items-center space-x-2.5">
+                <span className="text-xl">🤖</span>
+                <div>
+                  <h3 className="text-sm font-bold text-white">JARVIS AI Executive Assistant</h3>
+                  <p className="text-[10px] text-emerald-400 font-mono">App Data Oversight & Tactical Coaching</p>
+                </div>
+              </div>
+              <button
+                onClick={handleToggleJarvisPermission}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-md ${
+                  jarvisPermission
+                    ? "bg-emerald-500 text-black shadow-emerald-500/20"
+                    : "bg-white/[0.08] text-gray-300 hover:bg-white/[0.15]"
+                }`}
+              >
+                {jarvisPermission ? "🛡️ Oversight Granted (Active)" : "🔒 Grant App Oversight"}
+              </button>
+            </div>
+
+            <p className="text-[11px] text-gray-300 leading-relaxed">
+              When <strong>App Oversight</strong> is granted or your exported progress backup file is uploaded, JARVIS will analyze your tracking records and provide tactical coaching.
+            </p>
+
+            {/* Progress File Upload Widget */}
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-black/60 border border-white/[0.08]">
+              <div className="flex items-center space-x-2 truncate pr-2">
+                <span className="text-sm">📁</span>
+                <span className="text-[11px] text-gray-300 truncate font-mono">
+                  {jarvisFileName ? `Loaded: ${jarvisFileName}` : "Upload exported progress JSON file for JARVIS to read"}
+                </span>
+              </div>
+              <label className="px-3 py-1.5 rounded-lg bg-white/[0.08] text-white text-[11px] font-semibold hover:bg-white/[0.15] transition cursor-pointer shrink-0">
+                <span>Browse File</span>
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleUploadProgressFile}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            {/* Chat Box */}
+            <div className="p-3 rounded-xl bg-black/70 border border-white/[0.08] space-y-2.5 max-h-60 overflow-y-auto scrollbar-none">
+              {jarvisChatLog.map((msg, idx) => (
+                <div key={idx} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}>
+                  <div className={`p-2.5 rounded-xl text-xs max-w-[85%] leading-relaxed ${
+                    msg.role === "user"
+                      ? "bg-appGreen text-black font-medium"
+                      : "bg-white/[0.06] text-gray-200 border border-white/[0.08]"
+                  }`}>
+                    {msg.role === "assistant" && <strong className="text-emerald-400 block mb-0.5 font-mono text-[10px]">JARVIS:</strong>}
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+              {jarvisLoading && (
+                <div className="flex items-center space-x-2 text-xs text-emerald-400 font-mono p-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                  <span>JARVIS is analyzing your workspace data...</span>
+                </div>
+              )}
+            </div>
+
+            <form onSubmit={handleAskJarvis} className="flex items-center space-x-2 pt-1">
+              <input
+                type="text"
+                value={jarvisQuery}
+                onChange={(e) => setJarvisQuery(e.target.value)}
+                placeholder={jarvisPermission ? "Ask JARVIS to review your habits, exams, or workouts..." : "Grant app oversight permission above to chat with JARVIS..."}
+                disabled={!jarvisPermission || jarvisLoading}
+                className="flex-1 p-2.5 rounded-xl bg-black/90 border border-white/[0.1] text-xs text-white focus:outline-none focus:border-appGreen disabled:opacity-50"
+              />
+              <button
+                type="submit"
+                disabled={!jarvisPermission || jarvisLoading}
+                className="px-4 py-2.5 rounded-xl bg-appGreen text-black text-xs font-bold hover:bg-green-400 transition disabled:opacity-50 shadow-lg shadow-green-500/20 shrink-0"
+              >
+                Send
+              </button>
+            </form>
           </div>
         </div>
       );
@@ -3995,24 +4418,35 @@
             </div>
 
             {/* Quick Actions Row */}
-            <div className="grid grid-cols-2 gap-2 pt-1">
+            <div className="grid grid-cols-1 gap-2 pt-1">
               <a
-                href={githubReleasesUrl}
+                href="https://jitvaraj.github.io/Orion-Forge/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold hover:from-emerald-500/30 hover:to-teal-500/30 transition flex items-center justify-center space-x-1.5 shadow-lg shadow-green-500/10"
+                className="py-2.5 px-3 rounded-xl bg-appGreen/20 border border-appGreen/40 text-appGreen text-xs font-bold hover:bg-appGreen/30 transition flex items-center justify-center space-x-1.5 shadow-lg shadow-green-500/10"
               >
-                <span>📦 GitHub Releases</span>
+                <span>🌐 Open Live Web App</span>
                 <span className="text-[10px]">↗</span>
               </a>
-              <button
-                onClick={() => {
-                  onTriggerInstall();
-                }}
-                className="py-2.5 px-3 rounded-xl bg-blue-500/20 border border-blue-500/40 text-blue-300 text-xs font-bold hover:bg-blue-500/30 transition flex items-center justify-center space-x-1.5"
-              >
-                <span>📲 Install Web PWA</span>
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <a
+                  href={githubReleasesUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold hover:from-emerald-500/30 hover:to-teal-500/30 transition flex items-center justify-center space-x-1.5 shadow-lg shadow-green-500/10"
+                >
+                  <span>📦 GitHub Releases</span>
+                  <span className="text-[10px]">↗</span>
+                </a>
+                <button
+                  onClick={() => {
+                    onTriggerInstall();
+                  }}
+                  className="py-2.5 px-3 rounded-xl bg-blue-500/20 border border-blue-500/40 text-blue-300 text-xs font-bold hover:bg-blue-500/30 transition flex items-center justify-center space-x-1.5"
+                >
+                  <span>📲 Install Web PWA</span>
+                </button>
+              </div>
             </div>
 
             {/* 1. Android APK Installation Guide */}
@@ -4220,34 +4654,6 @@
                   <span>📲 Instant PWA Install (All Devices)</span>
                 </button>
               )}
-
-              <a
-                href="https://github.com/Jitvaraj/Orion-Forge/releases"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-2 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs font-semibold hover:bg-blue-500/20 transition flex items-center justify-center space-x-1.5"
-              >
-                <span>🤖 Android App Package (APK)</span>
-              </a>
-
-              <a
-                href="https://github.com/Jitvaraj/Orion-Forge/releases"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-2 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-300 text-xs font-semibold hover:bg-purple-500/20 transition flex items-center justify-center space-x-1.5"
-              >
-                <span>💻 Windows Desktop Package</span>
-              </a>
-
-              <button
-                onClick={() => {
-                  onTriggerInstall();
-                  onClose();
-                }}
-                className="w-full py-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold hover:bg-amber-500/20 transition flex items-center justify-center space-x-1.5"
-              >
-                <span>📱 iPhone / iPad (iOS Safari PWA)</span>
-              </button>
             </div>
 
             {/* Data & Presets Actions */}

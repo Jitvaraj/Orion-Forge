@@ -45,8 +45,8 @@
     };
   </script>
 
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tailwind CSS (Local with CDN fallback for offline APK execution) -->
+  <script src="./vendor/tailwindcss.js" onerror="this.onerror=null;this.src='https://cdn.tailwindcss.com';"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -73,10 +73,10 @@
     };
   </script>
 
-  <!-- React & Babel for standalone execution -->
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- React & Babel (Local with CDN fallback for offline APK execution) -->
+  <script src="./vendor/react.production.min.js" onerror="this.onerror=null;this.src='https://unpkg.com/react@18/umd/react.production.min.js';" crossorigin></script>
+  <script src="./vendor/react-dom.production.min.js" onerror="this.onerror=null;this.src='https://unpkg.com/react-dom@18/umd/react-dom.production.min.js';" crossorigin></script>
+  <script src="./vendor/babel.min.js" onerror="this.onerror=null;this.src='https://unpkg.com/@babel/standalone/babel.min.js';"></script>
 
   <style>
     * {

@@ -4,3 +4,5 @@ bun.lock
 arc-v2.1.bundle
 .DS_Store
 Thumbs.db
+www/
+android/
