@@ -1,7 +1,7 @@
 {
   "appId": "com.orion.app",
   "appName": "Orion",
-  "webDir": "www",
+  "webDir": "docs",
   "bundledWebRuntime": false,
   "server": {
     "androidScheme": "https"
